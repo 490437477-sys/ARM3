@@ -1,94 +1,88 @@
 ﻿# Servo Arm Control System
 
-User Manual for Arduino & Python GUI
+A complete 5-servo robotic arm control system with three control methods.
 
-## 1. Product Overview
+## Hardware
 
-This software controls a 5-servo robotic arm using joysticks or serial commands. Compatible with Arduino UNO and similar boards.
+- Arduino UNO R3 (main controller)
+- 2x Dual-axis Joystick Modules
+- 5x MG995 Servo Motors
+- Mechanical arm components
 
-## 2. Safety Warning
-
-### Power Supply
-- After uploading code, switch from USB to external power supply
-- Use 5V 1A or higher power adapter
-- This ensures stable operation for board and servos
-
-### Overload Protection
-- Do not apply excessive force when grasping objects
-- If servo stalls, current increases sharply
-- Overcurrent will trigger board protection and restart
-
-## 3. Pin Definition
+## Pin Definition
 
 ### Joystick Pins
-| Control | Pin | Description |
-|---------|-----|-------------|
-| Joystick 1 X-axis | A0 | Analog Pin 0 |
-| Joystick 1 Y-axis | A1 | Analog Pin 1 |
-| Joystick 1 Button | D2 | Digital Pin 2 |
-| Joystick 2 X-axis | A3 | Analog Pin 3 |
-| Joystick 2 Y-axis | A2 | Analog Pin 2 |
-| Joystick 2 Button | D4 | Digital Pin 4 |
+| Control | Pin |
+|---------|-----|
+| Joystick 1 X | A0 |
+| Joystick 1 Y | A1 |
+| Joystick 1 Button | D2 |
+| Joystick 2 X | A3 |
+| Joystick 2 Y | A2 |
+| Joystick 2 Button | D4 |
 
 ### Servo Pins
-| Servo | Pin | Description |
-|-------|-----|-------------|
-| Servo 0 | D5 | Digital Pin 5 |
-| Servo 1 | D9 | Digital Pin 9 |
-| Servo 2 | D10 | Digital Pin 10 |
-| Servo 3 | D11 | Digital Pin 11 |
-| Servo 4 | D7 | Digital Pin 7 |
-| LED | D3 | Digital Pin 3 |
+| Servo | Pin | Range |
+|-------|-----|-------|
+| Servo 0 | D5 | 0-180° |
+| Servo 1 | D9 | 0-180° |
+| Servo 2 | D10 | 0-180° |
+| Servo 3 | D11 | 0-180° |
+| Servo 4 | D7 | 0-90° |
 
-## 4. Control Logic
+## Control Logic
 
-| Control | Pin | Servo | Range |
-|---------|-----|-------|-------|
-| Joystick 1 X | A0 | Servo 0 | 0-180 deg |
-| Joystick 1 Y | A1 | Servo 1 | 0-180 deg |
-| Joystick 1 Button | D2 | Servo 4 | 0-90 deg |
-| Joystick 2 X | A3 | Servo 2 | 0-180 deg |
-| Joystick 2 Y | A2 | Servo 3 | 0-180 deg |
-| Joystick 2 Button | D4 | Servo 4 | 0-90 deg |
+| Control | Pin | Servo | Range | Function |
+|---------|-----|-------|-------|---------|
+| Joystick 1 X | A0 | Servo 0 | 0-180° | X-axis |
+| Joystick 1 Y | A1 | Servo 1 | 0-180° | Y-axis |
+| Joystick 1 Button | D2 | Servo 4 | 0-90° | +2°/press |
+| Joystick 2 X | A3 | Servo 2 | 0-180° | X-axis |
+| Joystick 2 Y | A2 | Servo 3 | 0-180° | Y-axis |
+| Joystick 2 Button | D4 | Servo 4 | 0-90° | -2°/press |
 
-### Button Control
-- Joystick 1 Button: Servo 4 +2 deg per press (max 90 deg)
-- Joystick 2 Button: Servo 4 -2 deg per press (min 0 deg)
+## Quick Start
 
-## 5. Arduino Setup
-
-1. Open `servo_control.ino` in Arduino IDE
-2. Select your board (Arduino UNO/Nano)
-3. Select correct port
-4. Upload the sketch
+### Arduino Setup
+1. Open servo_control.ino in Arduino IDE
+2. Select Board: Arduino UNO
+3. Select COM port
+4. Upload sketch
 5. Open Serial Monitor (9600 baud)
 
-## 6. Serial Commands
-
+### Serial Commands
 | Command | Description |
 |---------|-------------|
-| `0 90` | Set Servo0 to 90 degrees (0-180) |
-| `1 45` | Set Servo1 to 45 degrees (0-180) |
-| `2 180` | Set Servo2 to 180 degrees (0-180) |
-| `3 90` | Set Servo3 to 90 degrees (0-180) |
-| `4 60` | Set Servo4 to 60 degrees (0-90) |
-| `90` | Set ALL servos to 90 degrees |
-| `90 90 90 90 90` | Batch set all servos |
+| 0 90 | Set Servo 0 to 90° |
+| 1 45 | Set Servo 1 to 45° |
+| 2 90 | Set Servo 2 to 90° |
+| 3 90 | Set Servo 3 to 90° |
+| 4 45 | Set Servo 4 to 45° (max 90°) |
+| 90 | Set ALL to 90° |
+| s | Show status |
+| h | Show help |
 
-### Example
+### Python GUI
+Requirements: Python 3.x, pyserial
+
+Setup:
+```bash
+pip install pyserial
 ```
-> 0 90
-S0:90
+
+Run:
+```bash
+python servo_control.py
 ```
 
-## 7. Python GUI Setup
+## Safety Warning
 
-1. Install Python 3.x
-2. Install pyserial: `pip install pyserial`
-3. Run: `python servo_control.py`
-4. Select COM port and click Connect
-5. Use sliders or enter values to control servos
+### Power Supply
+After uploading code, switch from computer USB to external power supply (9V 2A or higher). MG995 servos require adequate power.
 
-## 8. Support
+### Overload Protection
+Do not apply excessive force. Servo stall causes current surge and board restart.
+
+## Support
 
 GitHub: https://github.com/490437477-sys/servo-arm-control
