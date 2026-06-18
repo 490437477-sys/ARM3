@@ -290,14 +290,18 @@ class ServoControlApp:
         toolbar = tk.Frame(panel, bg=PANEL_BG)
         toolbar.pack(fill="x")
 
+        # Pack the right-side buttons FIRST so they reserve their natural widths
+        # before the long status label takes the remaining space on the left.
+        # Otherwise Clear gets squeezed between the label and Copy and its text
+        # is truncated to "Cl".
+        ttk.Button(toolbar, text="Copy",  style="Small.TButton", command=self._copy_log).pack(side="right", padx=(4, 0))
+        ttk.Button(toolbar, text="Clear", style="Small.TButton", command=self._clear_log).pack(side="right")
+
         tk.Checkbutton(toolbar, text="Auto-scroll", variable=self.autoscroll,
                        font=("Segoe UI", 9), fg=SUBTEXT, bg=PANEL_BG,
                        selectcolor=INPUT_BG, activebackground=PANEL_BG).pack(side="left")
         tk.Label(toolbar, text="   \u2191 sent (TX)   \u00b7   \u2193 received (RX)",
                  font=("Consolas", 8), fg=SUBTEXT, bg=PANEL_BG).pack(side="left")
-
-        ttk.Button(toolbar, text="Copy",  style="Small.TButton", command=self._copy_log).pack(side="right", padx=(4, 0))
-        ttk.Button(toolbar, text="Clear", style="Small.TButton", command=self._clear_log).pack(side="right")
 
         self.log_text = scrolledtext.ScrolledText(panel, height=18, bg=TERMINAL_BG, fg=TEXT,
                                                    font=("Consolas", 9), relief="flat", state="disabled",
