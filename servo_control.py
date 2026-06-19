@@ -63,7 +63,7 @@ ARM_REFRESH_MS = 60
 # moveDelay) as the floor so playback can keep up with the servo's
 # actual running speed rather than the 200 ms conservative cushion.
 # The slider's lower bound is clamped to this value.
-SERVO_MIN_INTERVAL_MS = 1500
+SERVO_MIN_INTERVAL_MS = 3000
 
 
 # ---------------------------------------------------------------------------
@@ -884,6 +884,10 @@ class ServoControlApp:
                   bg=GREEN, fg="#1e1e2e", activebackground=GREEN,
                   relief="flat", padx=14, pady=6, cursor="hand2",
                   command=self._load_trajectory).pack(side="left", padx=(6, 0))
+        tk.Button(row2, text="Run Example", font=("Segoe UI", 11, "bold"),
+                  bg=MAUVE, fg="#1e1e2e", activebackground=MAUVE,
+                  relief="flat", padx=14, pady=6, cursor="hand2",
+                  command=self._load_example_trajectory).pack(side="left", padx=(6, 0))
 
         # Row 3: Speed slider
         row3 = tk.Frame(panel, bg=PANEL_BG); row3.pack(fill="x", pady=(8, 0))
@@ -917,6 +921,9 @@ class ServoControlApp:
         sb.config(command=self.traj_list.yview)
         self.traj_list.bind("<<ListboxSelect>>", self._on_traj_list_select)
         self.traj_list.bind("<Double-Button-1>", self._on_traj_list_edit)
+        # Click anywhere outside the listbox to clear its selection so
+        # the trajectory "controls the servos" mode is released.
+        self.root.bind_all("<Button-1>", self._on_traj_list_outside_click, add="+")
 
     def _toggle_record(self):
         if self.recording:
@@ -1094,6 +1101,106 @@ class ServoControlApp:
         self._update_traj_status()
         self._log(f"loaded {len(cleaned)} frames from {path}", "info")
 
+    def _load_example_trajectory(self):
+        """Load the bundled example trajectory (Desktop/Example.json) and play it."""
+        # Hard-coded fallback so the button works even if the file is moved.
+        example = {
+            "format": "servo_control.trajectory.v1",
+            "version": "2.2.9",
+            "frame_count": 6,
+            "frames": [
+                [
+                    0,
+                    80,
+                    130,
+                    50,
+                    10
+                ],
+                [
+                    90,
+                    100,
+                    50,
+                    130,
+                    90
+                ],
+                [
+                    180,
+                    80,
+                    130,
+                    50,
+                    10
+                ],
+                [
+                    90,
+                    110,
+                    50,
+                    130,
+                    90
+                ],
+                [
+                    0,
+                    80,
+                    130,
+                    50,
+                    10
+                ],
+                [
+                    90,
+                    90,
+                    90,
+                    90,
+                    90
+                ]
+            ]
+        }
+        candidate_paths = [
+            r"C:\\Users\\Administrator\\Desktop\\Example.json",
+            r"C:\\Users\\Administrator\\Desktop\\1.json",
+        ]
+        payload = None
+        used_path = None
+        for p in candidate_paths:
+            try:
+                with open(p, "r", encoding="utf-8") as fp:
+                    payload = json.load(fp)
+                    used_path = p
+                    break
+            except FileNotFoundError:
+                continue
+            except Exception as exc:
+                self._log(f"example load failed: {exc}", "err")
+                return
+        if payload is None:
+            self._log("example file not found, using bundled fallback", "warn")
+            payload = example
+
+        frames = payload.get("frames") if isinstance(payload, dict) else None
+        if not frames or not isinstance(frames, list):
+            self._log("example file has no frames array, using bundled fallback", "warn")
+            frames = example["frames"]
+
+        if self.playing:
+            self._stop_play()
+        cleaned = []
+        for f in frames:
+            if not isinstance(f, (list, tuple)) or len(f) != 5:
+                continue
+            try:
+                row = [max(0, min(self.SERVO_LIMITS[i], int(f[i]))) for i in range(5)]
+                cleaned.append(row)
+            except (ValueError, TypeError):
+                continue
+        if not cleaned:
+            self._log("example trajectory has no valid frames", "err")
+            return
+        self.trajectory = cleaned
+        self._play_index = 0
+        self._refresh_traj_list()
+        self._update_traj_status()
+        src = used_path if used_path else "(bundled fallback)"
+        self._log(f"loaded example -- {len(cleaned)} frames from {src}", "info")
+        self._toggle_play()
+
     def _refresh_traj_list(self):
         if self.traj_list is None:
             return
@@ -1104,7 +1211,12 @@ class ServoControlApp:
             self.traj_list.insert("end", line)
 
     def _on_traj_list_select(self, _event):
-        """Click a frame to jump to that pose (does not start playback)."""
+        """Click a frame: all 5 servos run to the angles in that row.
+        Does nothing during playback so the user does not accidentally
+        fight the auto-runner. Works while recording (the user can
+        still click old frames to pose the arm), and gracefully no-ops
+        on the serial line when not connected.
+        """
         if self.playing:
             return
         sel = self.traj_list.curselection()
@@ -1113,17 +1225,45 @@ class ServoControlApp:
         idx = sel[0]
         if idx < 0 or idx >= len(self.trajectory):
             return
-        frame = self.trajectory[idx]
+        frame = [int(a) for a in self.trajectory[idx]]
         for i, a in enumerate(frame):
-            self.target_vars[i].set(int(a))
             try:
-                self.sliders[i].set(int(a))
+                self.sliders[i].set(a)
             except Exception:
                 pass
+        # Send the command to actually move the servos (handles
+        # "not connected" gracefully and syncs target_vars + canvas).
+        self._send_batch_and_sync(frame)
+        self._log(
+            "jumped to frame " + str(idx + 1) + "/" + str(len(self.trajectory))
+            + ": " + " ".join(str(a) for a in frame),
+            "info")
+
+    def _on_traj_list_outside_click(self, event):
+        """Click anywhere outside the trajectory listbox to clear its
+        selection. This releases the "frame controls the servos" mode so
+        that moving sliders afterwards is not interpreted as jumping
+        between frames.
+        """
+        if self.traj_list is None or self.playing:
+            return
+        # Find the click target and walk up its parent chain.  If we
+        # land on the listbox itself, its frame, or its scrollbar, the
+        # click is "inside" and we keep the selection.
+        w = event.widget
+        inside = False
+        while w is not None:
+            if w is self.traj_list or w is self.traj_list.master:
+                inside = True
+                break
+            w = getattr(w, "master", None)
+        if inside:
+            return
         try:
-            self._draw_arm()
+            self.traj_list.selection_clear(0, "end")
         except Exception:
             pass
+
 
     def _on_traj_list_edit(self, event):
         """Double-click a frame to edit its 5 servo angles in-place.
