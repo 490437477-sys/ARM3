@@ -122,7 +122,7 @@ class ServoControlApp:
         self._play_after_id    = None
         self._last_snapshot_ts = 0
         self._suppress_snap    = False
-        self.traj_play_speed   = tk.IntVar(value=3000)
+        self.traj_play_speed   = tk.IntVar(value=3500)
         self.traj_loop         = tk.BooleanVar(value=False)
         self.traj_status       = tk.StringVar(value="\u25CF  Idle (0 frames)")
         self.traj_list         = None
@@ -503,7 +503,7 @@ class ServoControlApp:
 
         # gripper (S4: 0 = closed, 90 = wide open with 90° total spread)
         # Each finger rotates out from the wrist direction; at s4=90 the two
-        # fingers are at ±45° from forward, so the total spread is 90°.
+        # fingers are at ±45° from forward, so the total spread is 90°
         open_ratio  = max(0.0, min(1.0, s4 / 90.0))
         half_spread = math.radians(45.0) * open_ratio
         grip_len    = 31 * SCALE
@@ -893,7 +893,7 @@ class ServoControlApp:
         row3 = tk.Frame(panel, bg=PANEL_BG); row3.pack(fill="x", pady=(8, 0))
         tk.Label(row3, text="Speed:", font=("Segoe UI", 9),
                  fg=SUBTEXT, bg=PANEL_BG).pack(side="left")
-        speed = tk.Scale(row3, from_=SERVO_MIN_INTERVAL_MS, to=4500, orient="horizontal",
+        speed = tk.Scale(row3, from_=SERVO_MIN_INTERVAL_MS, to=5000, orient="horizontal",
                         variable=self.traj_play_speed, resolution=50,
                         length=180, showvalue=True,
                         bg=PANEL_BG, fg=TEXT, troughcolor=INPUT_BG,
@@ -1102,87 +1102,30 @@ class ServoControlApp:
         self._log(f"loaded {len(cleaned)} frames from {path}", "info")
 
     def _load_example_trajectory(self):
-        """Load the bundled example trajectory (Desktop/Example.json) and play it."""
-        # Hard-coded fallback so the button works even if the file is moved.
+        """Load the bundled example trajectory (hard-coded) and play it.
+
+        The example is defined entirely in source so the button works
+        without any external file on disk.  Update the `frames` list
+        below to change the demo motion.
+        """
         example = {
             "format": "servo_control.trajectory.v1",
-            "version": "2.2.9",
+            "version": __version__,
             "frame_count": 6,
             "frames": [
-                [
-                    0,
-                    80,
-                    130,
-                    50,
-                    10
-                ],
-                [
-                    90,
-                    100,
-                    50,
-                    130,
-                    90
-                ],
-                [
-                    180,
-                    80,
-                    130,
-                    50,
-                    10
-                ],
-                [
-                    90,
-                    110,
-                    50,
-                    130,
-                    90
-                ],
-                [
-                    0,
-                    80,
-                    130,
-                    50,
-                    10
-                ],
-                [
-                    90,
-                    90,
-                    90,
-                    90,
-                    90
-                ]
-            ]
+                [  0,  80, 130,  50, 10],
+                [ 90,  90,  50, 130, 90],
+                [180,  80, 130,  50, 10],
+                [ 90,  90,  50, 130, 90],
+                [  0,  80, 130,  50, 10],
+                [ 90,  90,  90,  90, 90],
+            ],
         }
-        candidate_paths = [
-            r"C:\\Users\\Administrator\\Desktop\\Example.json",
-            r"C:\\Users\\Administrator\\Desktop\\1.json",
-        ]
-        payload = None
-        used_path = None
-        for p in candidate_paths:
-            try:
-                with open(p, "r", encoding="utf-8") as fp:
-                    payload = json.load(fp)
-                    used_path = p
-                    break
-            except FileNotFoundError:
-                continue
-            except Exception as exc:
-                self._log(f"example load failed: {exc}", "err")
-                return
-        if payload is None:
-            self._log("example file not found, using bundled fallback", "warn")
-            payload = example
-
-        frames = payload.get("frames") if isinstance(payload, dict) else None
-        if not frames or not isinstance(frames, list):
-            self._log("example file has no frames array, using bundled fallback", "warn")
-            frames = example["frames"]
 
         if self.playing:
             self._stop_play()
         cleaned = []
-        for f in frames:
+        for f in example["frames"]:
             if not isinstance(f, (list, tuple)) or len(f) != 5:
                 continue
             try:
@@ -1191,14 +1134,13 @@ class ServoControlApp:
             except (ValueError, TypeError):
                 continue
         if not cleaned:
-            self._log("example trajectory has no valid frames", "err")
+            self._log("bundled example trajectory has no valid frames", "err")
             return
         self.trajectory = cleaned
         self._play_index = 0
         self._refresh_traj_list()
         self._update_traj_status()
-        src = used_path if used_path else "(bundled fallback)"
-        self._log(f"loaded example -- {len(cleaned)} frames from {src}", "info")
+        self._log(f"loaded bundled example -- {len(cleaned)} frames", "info")
         self._toggle_play()
 
     def _refresh_traj_list(self):
