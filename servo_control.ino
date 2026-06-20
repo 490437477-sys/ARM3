@@ -1,18 +1,3 @@
-﻿/*
- * Servo Arm Control System
- * Main Controller: Arduino UNO R3
- * 
- * Hardware:
- * - 2x Dual-axis Joystick Modules
- * - 5x MG995 Servo Motors
- * - No LED
- * 
- * Control Methods:
- * 1. Joystick Control - Physical joysticks
- * 2. Serial Commands - Arduino IDE Serial Monitor
- * 3. Python GUI - Computer interface
- * Modify: Servo4 initial angle 90°, no auto refresh status, S2 reverse direction
- */
 #include <Servo.h>
 
 // ===================== PIN DEFINITIONS =====================
@@ -30,7 +15,7 @@ const int SERVO_COUNT = 5;
 // ===================== GLOBAL ADJUST PARAMETERS =====================
 const int deadZone     = 60;
 const int joyStep      = 1;
-const int moveDelay    = 40;
+const int moveDelay    = 60;
 const int btnDebounce  = 80;
 const int btnStep      = 3;
 const int smoothStep   = 1;
