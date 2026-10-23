@@ -21,7 +21,7 @@ const int SERVO_COUNT = 5;
 // ===================== ПАРАМЕТРЫ НАСТРОЙКИ =====================
 const int deadZone     = 60;
 const int joyStep      = 1;
-const int moveDelay    = 60;
+const int moveDelay    = 40;
 const int btnDebounce  = 80;
 const int btnStep      = 3;
 const int smoothStep   = 1;
