@@ -1,12 +1,23 @@
-﻿#include <Servo.h>
+/*
+  ARM4 — прошивка управления манипулятором (Arduino Uno / Nano)
 
-// ===============================================================
-// Локализация: русский.
-// Ключевые слова протокола (h, s, help, status) сохранены на английском
-// для совместимости с парсером Python GUI.
-// ===============================================================
+  Серво:     S0 пин 11 | S1 пин 10 | S2 пин 9 | S3 пин 5 | S4 захват пин 7
+  Джойстики: J1 X A0, Y A1, кнопка D2   |   J2 X A3, Y A2, кнопка D4
+  Порт:      9600 8N1. Принимаются только цифры, пробелы, h и s.
 
-// ===================== ОПРЕДЕЛЕНИЯ ВЫВОДОВ =====================
+    90                   все пять серво в 90
+    0 60                 серво 0 в 60 градусов
+    0 90 90 90 40        задать все пять серво одной строкой
+    s                    текущие углы: [Текущие углы S0,S1,S2,S3,S4]: a0,a1,a2,a3,a4
+    h                    справка по командам
+
+  Пределы: S0~S3 0~180, S4 (захват) 0~90. Серво 2 инвертирован в прошивке.
+  Питание серво — отдельный блок 9 В / 2 А, от USB-порта не питать.
+*/
+
+#include <Servo.h>
+
+// ===================== PIN DEFINITIONS =====================
 const int joy1XPin = A0;
 const int joy1YPin = A1;
 const int joy1BtnPin = 2;
@@ -18,7 +29,7 @@ const int joy2BtnPin = 4;
 const int servoPins[] = {11, 10, 9, 5, 7};
 const int SERVO_COUNT = 5;
 
-// ===================== ПАРАМЕТРЫ НАСТРОЙКИ =====================
+// ===================== GLOBAL ADJUST PARAMETERS =====================
 const int deadZone     = 60;
 const int joyStep      = 1;
 const int moveDelay    = 40;
@@ -30,7 +41,7 @@ const int MAX_ANGLE_NORMAL = 180;
 const int MAX_ANGLE_GRAB   = 90;
 const int MIN_ANGLE        = 0;
 
-// ===================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====================
+// ===================== GLOBAL VARIABLES =====================
 Servo servos[SERVO_COUNT];
 int angles[SERVO_COUNT]  = {90, 90, 90, 90, 90};
 int targets[SERVO_COUNT]= {90, 90, 90, 90, 90};
@@ -41,7 +52,7 @@ unsigned long lastBtn2Tick  = 0;
 
 String serialBuffer = "";
 
-// ===================== ИНИЦИАЛИЗАЦИЯ (SETUP) =====================
+// ===================== SETUP =====================
 void setup() {
   pinMode(joy1BtnPin, INPUT_PULLUP);
   pinMode(joy2BtnPin, INPUT_PULLUP);
@@ -56,11 +67,11 @@ void setup() {
   while(!Serial) delay(10);
 
   printHelpInfo();
-  Serial.print("Инициализация OK, Исходное положение: ");
+  Serial.print("Инициализация завершена, начальные углы: ");
   printNumArray(angles, SERVO_COUNT);
 }
 
-// ===================== ИНВЕРСИЯ УГЛА СЕРВОПРИВОДА =====================
+// ===================== SERVO ANGLE REVERSE CONVERT =====================
 int getRealAngle(int servoIdx, int inputAngle){
   if(servoIdx == 2){
     return 180 - inputAngle;
@@ -68,7 +79,7 @@ int getRealAngle(int servoIdx, int inputAngle){
   return inputAngle;
 }
 
-// ===================== ГЛАВНЫЙ ЦИКЛ =====================
+// ===================== MAIN LOOP =====================
 void loop() {
   unsigned long nowMs = millis();
 
@@ -83,7 +94,7 @@ void loop() {
   handleGrabButtons(nowMs);
 }
 
-// ===================== ПЛАВНАЯ ИНТЕРПОЛЯЦИЯ СЕРВОПРИВОДА =====================
+// ===================== SMOOTH SERVO INTERPOLATION =====================
 void smoothServoMove(){
   for(int i = 0; i < SERVO_COUNT; i++){
     if(angles[i] < targets[i]){
@@ -97,7 +108,7 @@ void smoothServoMove(){
   }
 }
 
-// ===================== ОБРАБОТКА ДЖОЙСТИКОВ =====================
+// ===================== JOYSTICK PROCESS =====================
 void handleJoysticks(){
   int j1X = analogRead(joy1XPin) - 512;
   int j1Y = analogRead(joy1YPin) - 512;
@@ -117,7 +128,7 @@ void handleJoysticks(){
   else if(j2Y > deadZone) targets[3] = constrain(targets[3] + joyStep, MIN_ANGLE, MAX_ANGLE_NORMAL);
 }
 
-// ===================== УПРАВЛЕНИЕ ЗАХВАТОМ (S4) КНОПКАМИ =====================
+// ===================== GRAB BUTTON CONTROL S4 =====================
 void handleGrabButtons(unsigned long now){
   if(digitalRead(joy1BtnPin) == LOW && now - lastBtn1Tick > btnDebounce){
     targets[4] = constrain(targets[4] + btnStep, MIN_ANGLE, MAX_ANGLE_GRAB);
@@ -129,7 +140,7 @@ void handleGrabButtons(unsigned long now){
   }
 }
 
-// ===================== ОБРАБОТКА ДАННЫХ ПОСЛЕДОВАТЕЛЬНОГО ПОРТА =====================
+// ===================== SERIAL DATA PROCESS =====================
 void handleSerialInput(){
   while(Serial.available() > 0){
     char ch = Serial.read();
@@ -155,7 +166,7 @@ void parseSerialCommand(String cmd){
     return;
   }
   if(cmd == "s" || cmd == "status"){
-    Serial.print("СТАТУС Все сервоприводы [S0,S1,S2,S3,S4]: ");
+    Serial.print("[Текущие углы S0,S1,S2,S3,S4]: ");
     printNumArray(angles, SERVO_COUNT);
     return;
   }
@@ -179,7 +190,7 @@ void parseSerialCommand(String cmd){
       int limit = (i == 4) ? MAX_ANGLE_GRAB : MAX_ANGLE_NORMAL;
       targets[i] = constrain(parseVals[i], MIN_ANGLE, limit);
     }
-    Serial.print("Пакет OK, Цель: ");
+    Serial.print("Массовая установка принята, целевые углы: ");
     printNumArray(targets, SERVO_COUNT);
     return;
   }
@@ -190,7 +201,7 @@ void parseSerialCommand(String cmd){
       int limit = (i == 4) ? MAX_ANGLE_GRAB : MAX_ANGLE_NORMAL;
       targets[i] = constrain(setAll, MIN_ANGLE, limit);
     }
-    Serial.print("Все сервоприводы установлены на ");
+    Serial.print("Все серво установлены в: ");
     Serial.println(setAll);
     return;
   }
@@ -201,28 +212,28 @@ void parseSerialCommand(String cmd){
     if(servoId >= 0 && servoId < SERVO_COUNT){
       int limit = (servoId == 4) ? MAX_ANGLE_GRAB : MAX_ANGLE_NORMAL;
       targets[servoId] = constrain(setAng, MIN_ANGLE, limit);
-      Serial.print("S");
+      Serial.print("Серво");
       Serial.print(servoId);
-      Serial.print(" цель = ");
+      Serial.print(" установлено, целевой угол = ");
       Serial.println(targets[servoId]);
       return;
     }
   }
 
-  Serial.println("Ошибка: неверная команда, введите h для справки");
+  Serial.println("[Ошибка] Команда не распознана, введите h для справки");
 }
 
-// ===================== УТИЛИТЫ ВЫВОДА В ПОРТ =====================
+// ===================== SERIAL PRINT UTILS =====================
 void printHelpInfo(){
-  Serial.println("======== Список команд манипулятора ========");
-  Serial.println("h        Показать справку");
-  Serial.println("s        Показать текущие углы всех 5 сервоприводов");
-  Serial.println("90       Установить все сервоприводы на 90");
-  Serial.println("0 60     Установить S0 на 60");
-  Serial.println("0 90 90 90 40 Пакетная установка всех целей");
-  Serial.println("Пределы: S0-S3 0-180 | S4 (Захват) 0-90");
-  Serial.println("Примечание: S2 направление инвертировано внутри");
-  Serial.println("==========================================");
+  Serial.println("========== Справка по командам ==========");
+  Serial.println("h          показать эту справку");
+  Serial.println("s          запросить текущие углы пяти серво");
+  Serial.println("90         все серво в 90 градусов");
+  Serial.println("0 60       задать серво0 в 60 градусов");
+  Serial.println("0 90 90 90 40  задать все серво одной строкой");
+  Serial.println("Пределы: S0~S3 0~180 | S4 захват 0~90");
+  Serial.println("Примечание: серво2 инвертировано в прошивке");
+  Serial.println("========================================");
 }
 
 void printNumArray(int arr[], int len){
